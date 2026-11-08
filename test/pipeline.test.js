@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 import { run } from '../src/worker.js';
 import { chileDay } from '../src/feeds.js';
 
-function fixture(t) {
+function fixture(t, minute = 38) {
   const db = new DatabaseSync(':memory:');
   db.exec(readFileSync(new URL('../migrations/0001.sql', import.meta.url), 'utf8'));
   const wrap = (sql, values = []) => ({
@@ -13,9 +13,9 @@ function fixture(t) {
     async run() { return { meta: { changes: Number(db.prepare(sql).run(...values).changes) } }; },
     async first() { return db.prepare(sql).get(...values); }
   });
-  const env = { ENABLED:'true', DAILY_LIMIT:'6', DISCORD_BOT_TOKEN:'test-token', NEWS_CHANNEL_ID:'123456789012345678', LIBRARY_CHANNEL_ID:'234567890123456789', DB: { prepare: wrap, async batch(statements) { return Promise.all(statements.map(s => s.run())); } } };
+  const env = { ENABLED:'true', NEWS_DAILY_LIMIT:'12', LIBRARY_DAILY_LIMIT:'6', DISCORD_BOT_TOKEN:'test-token', NEWS_CHANNEL_ID:'123456789012345678', LIBRARY_CHANNEL_ID:'234567890123456789', DB: { prepare: wrap, async batch(statements) { return Promise.all(statements.map(s => s.run())); } } };
   // Select a Diario Financiero news slot.
-  const timestamp = Math.floor(Date.now() / 10800000) * 10800000 + 38 * 60000;
+  const timestamp = Math.floor(Date.now() / 10800000) * 10800000 + minute * 60000;
   let calls = 0;
   let failure = false;
   t.mock.method(globalThis, 'fetch', async (url, options) => {
@@ -48,10 +48,62 @@ test('Uncertain network delivery is not blindly retried', async t => {
   assert.equal(f.calls(), 1);
 });
 test('Daily cap stops publication', async t => {
-  const f = fixture(t); f.env.DAILY_LIMIT = '1';
+  const f = fixture(t); f.env.NEWS_DAILY_LIMIT = '1';
   f.db.exec("INSERT INTO sources VALUES('diario-financiero',1)");
   f.db.prepare("INSERT INTO entries(url,source,status,local_day) VALUES('https://example.com/old','diario-financiero','sent',?)").run(chileDay(f.timestamp));
   assert.equal((await run(f.env, f.timestamp)).status, 'daily_limit');
+  assert.equal(f.calls(), 0);
+});
+
+function seedQuota(f, source, count, day = chileDay(f.timestamp)) {
+  const insert = f.db.prepare('INSERT INTO entries(url,source,status,local_day) VALUES(?,?,?,?)');
+  for (let i=0; i<count; i++) insert.run(`https://example.com/${source}/${day}/${i}`, source, ['sent','reserved','uncertain'][i % 3], day);
+}
+
+test('News allows the twelfth item despite a full library quota, then stops', async t => {
+  const f = fixture(t);
+  f.db.exec("INSERT INTO sources VALUES('diario-financiero',1)");
+  seedQuota(f, 'diario-financiero', 4);
+  seedQuota(f, 'dw-es', 4);
+  seedQuota(f, 'biobiochile', 3);
+  seedQuota(f, 'freecodecamp-es', 6);
+  assert.equal((await run(f.env, f.timestamp)).status, 'published');
+  assert.equal((await run(f.env, f.timestamp)).status, 'daily_limit');
+  assert.equal(f.calls(), 1);
+});
+
+test('Library allows its sixth item despite a full news quota, then stops', async t => {
+  const f = fixture(t, 7);
+  f.db.exec("INSERT INTO sources VALUES('freecodecamp-es',1)");
+  seedQuota(f, 'diario-financiero', 12);
+  seedQuota(f, 'freecodecamp-es', 5);
+  assert.equal((await run(f.env, f.timestamp)).status, 'published');
+  assert.equal((await run(f.env, f.timestamp)).status, 'daily_limit');
+  assert.equal(f.calls(), 1);
+});
+
+test('Historical BBC deliveries count toward news, never toward library', async t => {
+  const f = fixture(t, 7);
+  f.db.exec("INSERT INTO sources VALUES('diario-financiero',1),('freecodecamp-es',1)");
+  seedQuota(f, 'bbc-mundo', 12);
+  assert.equal((await run(f.env, f.timestamp + 31*60000)).status, 'daily_limit');
+  assert.equal((await run(f.env, f.timestamp)).status, 'published');
+  assert.equal(f.calls(), 1);
+});
+
+test('Previous days and baseline entries do not consume the news quota', async t => {
+  const f = fixture(t);
+  f.db.exec("INSERT INTO sources VALUES('diario-financiero',1)");
+  seedQuota(f, 'diario-financiero', 12, chileDay(f.timestamp - 86400000));
+  seedQuota(f, 'dw-es', 12);
+  f.db.exec("UPDATE entries SET status='baseline' WHERE source='dw-es'");
+  assert.equal((await run(f.env, f.timestamp)).status, 'published');
+});
+
+test('News older than 48 hours is not used to fill the daily quota', async t => {
+  const f = fixture(t);
+  f.db.exec("INSERT INTO sources VALUES('diario-financiero',1)");
+  assert.equal((await run(f.env, f.timestamp + 3*86400000)).status, 'no_new_items');
   assert.equal(f.calls(), 0);
 });
 test('Concurrent run lease prevents duplicate posting', async t => {

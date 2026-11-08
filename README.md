@@ -18,13 +18,13 @@ La presencia de RADAR está desplegada junto a TARS en Render, con un cliente in
 - BioBioChile: solo secciones Nacional, Internacional, Economía y Ciencia y Tecnología. Este filtro temático aproxima relevancia, sin evaluar importancia editorial.
 - freeCodeCamp español continúa como fuente de recursos educativos.
 - Primera consulta: registra el contenido existente sin publicarlo.
-- Máximo de una publicación por ejecución y seis publicaciones totales por día de Chile, zona America/Santiago (con cambios de horario automáticos).
+- Máximo de una publicación por ejecución, hasta 12 noticias y 6 recursos de Biblioteca por día, con cupos independientes. El día se calcula en America/Santiago (con cambios de horario automáticos).
 - Publica título y enlace con atribución, sin copiar artículos completos ni prometer certificados gratuitos.
 - Selección por fuente y antigüedad (hasta dos días para noticias), más el filtro temático de BioBioChile; no verifica hechos. Lee RSS 2.0, RSS 1.0/RDF y Atom.
 - No repite enlaces conocidos y desactiva menciones.
 - Ante resultados de entrega ambiguos, conserva el registro para revisión; no reintenta automáticamente arriesgando duplicados.
 
-Canales configurados: Noticias `1568787404339290202`, Biblioteca `1501665090792063067`. Límite de seis publicaciones diarias entre ambos canales. Solo se publican novedades posteriores a la inicialización: una revisión sin novedades no crea mensajes.
+Canales configurados: Noticias `1568787404339290202`, Biblioteca `1501665090792063067`. Los límites se configuran con `NEWS_DAILY_LIMIT=12` y `LIBRARY_DAILY_LIMIT=6`; las tres fuentes de noticias comparten el cupo de Noticias. Las publicaciones enviadas, reservadas o de entrega incierta cuentan para su respectivo cupo diario, incluido el historial de BBC. Solo se publican novedades posteriores a la inicialización: una revisión sin novedades no crea mensajes. Las noticias deben tener como máximo 48 horas y se priorizan las más recientes; no se evalúa su importancia ni se utiliza IA.
 
 Validación: ejecutar `npm test` para comprobar el publicador, incluyendo RDF, entidades XML, filtro temático y rotación completa de fuentes. Los diagnósticos iniciales de Cloudflare terminaron con resultado `ok` (27 y 15 ms de CPU); estos valores no garantizan que toda ejecución futura encaje en los límites gratuitos. Revisar errores y consumo en Observability si dejan de aparecer novedades.
 

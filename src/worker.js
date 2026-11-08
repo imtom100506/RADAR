@@ -1,4 +1,4 @@
-import { sourceAt, parseFeed, eligible, discordPost, chileDay } from './feeds.js';
+import { SOURCES, sourceAt, parseFeed, eligible, discordPost, chileDay } from './feeds.js';
 
 async function readFeed(source) {
   const response = await fetch(source.url, { signal: AbortSignal.timeout(15000), headers: { 'User-Agent': 'RADAR/0.1 RSS reader', Accept: 'application/rss+xml, application/atom+xml, application/xml, text/xml' } });
@@ -40,8 +40,11 @@ export async function run(env, timestamp = Date.now()) {
     }
     if (env.INITIALIZE_ONLY === 'true') return { status: 'checked_without_publishing', source: source.id, count: items.length };
     const day = chileDay(timestamp);
-    const used = await env.DB.prepare("SELECT count(*) AS n FROM entries WHERE status IN ('sent','reserved','uncertain') AND local_day=?").bind(day).first();
-    const limit = Math.max(1, Math.min(20, Number(env.DAILY_LIMIT) || 6));
+    const isNews = source.channel === 'NEWS_CHANNEL_ID';
+    const librarySources = SOURCES.filter(s => s.channel === 'LIBRARY_CHANNEL_ID').map(s => s.id);
+    // Include historical news sources (such as BBC) in today's news quota.
+    const used = await env.DB.prepare(`SELECT count(*) AS n FROM entries WHERE status IN ('sent','reserved','uncertain') AND local_day=? AND source ${isNews ? 'NOT IN' : 'IN'} (${librarySources.map(() => '?').join(',')})`).bind(day, ...librarySources).first();
+    const limit = Math.max(1, Math.min(20, Number(isNews ? env.NEWS_DAILY_LIMIT : env.LIBRARY_DAILY_LIMIT) || (isNews ? 12 : 6)));
     if (used.n >= limit) return { status: 'daily_limit' };
     for (const item of items.filter(item => eligible(item, source, timestamp)).sort((a,b) => b.date - a.date)) {
       const claim = await env.DB.prepare("INSERT OR IGNORE INTO entries(url,source,status,local_day) VALUES(?,?,'reserved',?)").bind(item.url, source.id, day).run();

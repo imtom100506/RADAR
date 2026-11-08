@@ -19,7 +19,8 @@
   "vars": {
     "ENABLED": "true",
     "INITIALIZE_ONLY": "false",
-    "DAILY_LIMIT": "6",
+    "NEWS_DAILY_LIMIT": "12",
+    "LIBRARY_DAILY_LIMIT": "6",
     "NEWS_CHANNEL_ID": "1568787404339290202",
     "LIBRARY_CHANNEL_ID": "1501665090792063067"
   },
