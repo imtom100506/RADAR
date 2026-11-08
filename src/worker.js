@@ -77,7 +77,7 @@ export async function run(env, timestamp = Date.now()) {
 
 export default {
   fetch(request) {
-    return Response.json({ nombre: 'RADAR', servicio: 'Publicador programado de noticias y recursos', zona_horaria: 'America/Santiago' });
+    return Response.json({ nombre: 'RADAR', servicio: 'Noticias y recursos educativos' });
   },
   async scheduled(event, env) {
     // Los cambios de cron tardan en propagarse: ignorar el horario de diagnóstico anterior.
