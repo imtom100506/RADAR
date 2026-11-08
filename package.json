@@ -1,0 +1,15 @@
+{
+  "name": "radar-discord",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "dependencies": {
+    "fast-xml-parser": "^5.12.0",
+    "wrangler": "^4.158.0"
+  }
+}

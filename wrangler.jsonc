@@ -1,0 +1,29 @@
+{
+  "name": "radar",
+  "main": "src/worker.js",
+  "compatibility_date": "2026-11-07",
+  "account_id": "8730d8056db2b22dc5a4dccba5d38b6e",
+  "workers_dev": true,
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "radar-db",
+      "database_id": "3527a5ff-5b2b-4176-b44b-0da25612798f"
+    }
+  ],
+  "triggers": {
+    "crons": [
+      "7,38 * * * *"
+    ]
+  },
+  "vars": {
+    "ENABLED": "true",
+    "INITIALIZE_ONLY": "false",
+    "DAILY_LIMIT": "6",
+    "NEWS_CHANNEL_ID": "1568787404339290202",
+    "LIBRARY_CHANNEL_ID": "1501665090792063067"
+  },
+  "observability": {
+    "enabled": true
+  }
+}
