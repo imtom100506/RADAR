@@ -13,14 +13,14 @@
   ],
   "triggers": {
     "crons": [
-      "7,38 * * * *"
+      "7,27,38,47 * * * *"
     ]
   },
   "vars": {
     "ENABLED": "true",
     "INITIALIZE_ONLY": "false",
     "NEWS_DAILY_LIMIT": "12",
-    "LIBRARY_DAILY_LIMIT": "6",
+    "LIBRARY_DAILY_LIMIT": "8",
     "NEWS_CHANNEL_ID": "1568787404339290202",
     "LIBRARY_CHANNEL_ID": "1501665090792063067"
   },

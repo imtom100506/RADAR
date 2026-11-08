@@ -8,14 +8,16 @@ import { chileDay } from '../src/feeds.js';
 function fixture(t, minute = 38) {
   const db = new DatabaseSync(':memory:');
   db.exec(readFileSync(new URL('../migrations/0001.sql', import.meta.url), 'utf8'));
+  db.exec(readFileSync(new URL('../migrations/0002_library.sql', import.meta.url), 'utf8'));
   const wrap = (sql, values = []) => ({
     bind(...args) { return wrap(sql, args); },
     async run() { return { meta: { changes: Number(db.prepare(sql).run(...values).changes) } }; },
-    async first() { return db.prepare(sql).get(...values); }
+    async first() { return db.prepare(sql).get(...values); },
+    async all() { return {results:db.prepare(sql).all(...values)}; }
   });
-  const env = { ENABLED:'true', NEWS_DAILY_LIMIT:'12', LIBRARY_DAILY_LIMIT:'6', DISCORD_BOT_TOKEN:'test-token', NEWS_CHANNEL_ID:'123456789012345678', LIBRARY_CHANNEL_ID:'234567890123456789', DB: { prepare: wrap, async batch(statements) { return Promise.all(statements.map(s => s.run())); } } };
+  const env = { ENABLED:'true', NEWS_DAILY_LIMIT:'12', LIBRARY_DAILY_LIMIT:'8', DISCORD_BOT_TOKEN:'test-token', NEWS_CHANNEL_ID:'123456789012345678', LIBRARY_CHANNEL_ID:'234567890123456789', DB: { prepare: wrap, async batch(statements) { return Promise.all(statements.map(s => s.run())); } } };
   // Select a Diario Financiero news slot.
-  const timestamp = Math.floor(Date.now() / 10800000) * 10800000 + minute * 60000;
+  const timestamp = Math.floor(Date.now() / 54000000) * 54000000 + minute * 60000;
   let calls = 0;
   let failure = false;
   t.mock.method(globalThis, 'fetch', async (url, options) => {
@@ -66,17 +68,18 @@ test('News allows the twelfth item despite a full library quota, then stops', as
   seedQuota(f, 'diario-financiero', 4);
   seedQuota(f, 'dw-es', 4);
   seedQuota(f, 'biobiochile', 3);
-  seedQuota(f, 'freecodecamp-es', 6);
+  seedQuota(f, 'freecodecamp-es', 8);
   assert.equal((await run(f.env, f.timestamp)).status, 'published');
   assert.equal((await run(f.env, f.timestamp)).status, 'daily_limit');
   assert.equal(f.calls(), 1);
 });
 
-test('Library allows its sixth item despite a full news quota, then stops', async t => {
+test('Library allows its eighth item across providers despite a full news quota, then stops', async t => {
   const f = fixture(t, 7);
   f.db.exec("INSERT INTO sources VALUES('freecodecamp-es',1)");
   seedQuota(f, 'diario-financiero', 12);
   seedQuota(f, 'freecodecamp-es', 5);
+  seedQuota(f, 'kaggle-learn', 2);
   assert.equal((await run(f.env, f.timestamp)).status, 'published');
   assert.equal((await run(f.env, f.timestamp)).status, 'daily_limit');
   assert.equal(f.calls(), 1);

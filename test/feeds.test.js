@@ -61,15 +61,17 @@ test('BioBioChile accepts current affairs sections and excludes unrelated storie
   assert.equal(eligible({date:now-3*86400000,url:'https://www.biobiochile.cl/noticias/nacional/articulo'},source,now), false);
 });
 
-test('Real cron slots rotate all three news sources evenly and preserve hourly library', () => {
-  const counts = {};
+test('Real cron slots rotate every news and library source without starvation', () => {
+  const counts = {}, libraryCounts={};
   const start = Date.parse('2026-11-08T00:00:00Z');
-  for (let hour=0; hour<48; hour++) {
-    assert.equal(sourceAt(start + hour*3600000 + 7*60000).id, 'freecodecamp-es');
+  for (let hour=0; hour<60; hour++) {
+    for(const minute of [7,27,47]){const s=sourceAt(start+hour*3600000+minute*60000);assert.equal(s.channel,'LIBRARY_CHANNEL_ID');libraryCounts[s.id]=(libraryCounts[s.id]??0)+1;}
     const source = sourceAt(start + hour*3600000 + 38*60000);
     counts[source.id] = (counts[source.id] ?? 0) + 1;
     assert.equal(source.channel, 'NEWS_CHANNEL_ID');
   }
-  assert.deepEqual(counts, {'diario-financiero':16,'dw-es':16,'biobiochile':16});
+  assert.deepEqual(counts, {'diario-financiero':20,'dw-es':20,'biobiochile':20});
+  assert.equal(Object.keys(libraryCounts).length,15);
+  assert.ok(Object.values(libraryCounts).every(n=>n===12));
   assert.equal(SOURCES.some(source => /bbc/i.test(JSON.stringify(source))), false);
 });

@@ -1,17 +1,23 @@
 import { XMLParser } from 'fast-xml-parser';
+import { LIBRARY_SOURCES } from './library-sources.js';
+import { libraryEligible } from './library-policy.js';
 
 export const SOURCES = [
   { id: 'diario-financiero', name: 'Diario Financiero', url: 'https://www.df.cl/noticias/site/list/port/rss.xml', channel: 'NEWS_CHANNEL_ID', maxAgeDays: 2 },
   { id: 'dw-es', name: 'DW en español', url: 'https://rss.dw.com/rdf/rss-sp-all', channel: 'NEWS_CHANNEL_ID', maxAgeDays: 2 },
   { id: 'biobiochile', name: 'BioBioChile', url: 'https://www.biobiochile.cl/static/feed-rss', channel: 'NEWS_CHANNEL_ID', maxAgeDays: 2,
     sections: ['nacional', 'internacional', 'economia', 'ciencia-y-tecnologia'] },
-  { id: 'freecodecamp-es', name: 'freeCodeCamp en español', url: 'https://www.freecodecamp.org/espanol/news/rss/', channel: 'LIBRARY_CHANNEL_ID', maxAgeDays: 30 }
+  { id: 'freecodecamp-es', name: 'freeCodeCamp en español', url: 'https://www.freecodecamp.org/espanol/news/rss/', channel: 'LIBRARY_CHANNEL_ID', maxAgeDays: 30 },
+  ...LIBRARY_SOURCES
 ];
 
 export function sourceAt(timestamp) {
-  // Biblioteca a :07; las fuentes de noticias se turnan a :38, sin saltarse ninguna.
+  // Three library slots/hour: every provider is checked once per five hours.
   const hour = Math.floor(timestamp / 3600000);
-  if (new Date(timestamp).getUTCMinutes() < 30) return SOURCES.find(source => source.channel === 'LIBRARY_CHANNEL_ID');
+  if (new Date(timestamp).getUTCMinutes() !== 38) {
+    const library=SOURCES.filter(source=>source.channel==='LIBRARY_CHANNEL_ID');
+    return library[Math.floor(timestamp/1200000)%library.length];
+  }
   const news = SOURCES.filter(source => source.channel === 'NEWS_CHANNEL_ID');
   return news[hour % news.length];
 }
@@ -47,6 +53,7 @@ export function parseFeed(xml) {
   }).filter(item => item.title && item.url);
 }
 export function eligible(item, source, now = Date.now()) {
+  if(source.kind==='library')return libraryEligible(item,now);
   if (source.sections) {
     try {
       const url = new URL(item.url);
@@ -58,10 +65,16 @@ export function eligible(item, source, now = Date.now()) {
 }
 export function discordPost(item, source) {
   const category = source.channel === 'NEWS_CHANNEL_ID' ? 'Noticia' : 'Recurso educativo';
+  const details=source.kind==='library' ? [
+    `Tipo: ${item.type}`, `Tema: ${item.topics.join(', ')}`,
+    item.language && `Idioma: ${item.language}`, item.duration && `Duración: ${item.duration}`,
+    item.level && `Nivel: ${item.level}`, `Contenido: ${item.cost}`,
+    item.certificate
+  ].filter(Boolean).join('\n') : '';
   return {
     name: item.title.slice(0, 100),
     message: {
-      content: `📡 **RADAR · ${category}**\nFuente: ${source.name}\n${item.url}\n\n${category === 'Noticia' ? 'Selección automática por fuente; revisa el artículo original.' : 'Consulta el recurso original para conocer acceso, idioma y condiciones del certificado.'}`,
+      content: `📡 **RADAR · ${category}**\nFuente: ${source.name}\n${item.url}\n\n${details || (category === 'Noticia' ? 'Selección automática por fuente; revisa el artículo original.' : 'Consulta el recurso original para conocer acceso, idioma y condiciones del certificado.')}`,
       allowed_mentions: { parse: [] }
     }
   };
