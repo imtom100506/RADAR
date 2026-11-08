@@ -1,4 +1,4 @@
-import { SOURCES, parseFeed, eligible, discordPost, chileDay } from './feeds.js';
+import { sourceAt, parseFeed, eligible, discordPost, chileDay } from './feeds.js';
 
 async function readFeed(source) {
   const response = await fetch(source.url, { signal: AbortSignal.timeout(15000), headers: { 'User-Agent': 'RADAR/0.1 RSS reader', Accept: 'application/rss+xml, application/atom+xml, application/xml, text/xml' } });
@@ -21,7 +21,7 @@ export async function run(env, timestamp = Date.now()) {
   if (env.ENABLED !== 'true') return { status: 'paused' };
   if (env.DIAGNOSTIC_UNTIL && timestamp > Number(env.DIAGNOSTIC_UNTIL)) return { status: 'diagnostic_expired' };
   if (!env.DB || !env.DISCORD_BOT_TOKEN) throw new Error('Missing DB or Discord token');
-  const source = SOURCES[Math.floor(timestamp / 60000) % SOURCES.length];
+  const source = sourceAt(timestamp);
   const channel = env[source.channel];
   if (!/^\d{17,22}$/.test(channel ?? '')) throw new Error(`Missing ${source.channel}`);
   const lease = await env.DB.prepare('INSERT INTO locks(id,expires) VALUES(?,?) ON CONFLICT(id) DO UPDATE SET expires=excluded.expires WHERE locks.expires < ?').bind('run', timestamp + 300000, timestamp).run();

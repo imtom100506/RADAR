@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseFeed, canonical, eligible, discordPost, SOURCES, chileDay } from '../src/feeds.js';
+import { parseFeed, canonical, eligible, discordPost, SOURCES, chileDay, sourceAt } from '../src/feeds.js';
 import worker, { run } from '../src/worker.js';
 
 test('RSS normalization and removal of tracking identifiers', () => {
@@ -33,4 +33,43 @@ test('Daily quota follows Chile local date in summer and winter', () => {
 });
 test('Stale diagnostic schedule cannot publish after restoring normal frequency', async () => {
   await worker.scheduled({cron:'* * * * *',scheduledTime:Date.now()},{ENABLED:'true'});
+});
+
+test('DW RSS 1.0/RDF reads sibling items and dc:date', () => {
+  const items = parseFeed('<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:dc="http://purl.org/dc/elements/1.1/"><channel><title>DW</title></channel><item><title>Actualidad mundial</title><link>https://www.dw.com/es/noticia/a-123</link><dc:date>2026-11-08T12:11:00Z</dc:date></item></rdf:RDF>');
+  assert.deepEqual(items, [{title:'Actualidad mundial',url:'https://www.dw.com/es/noticia/a-123',date:Date.parse('2026-11-08T12:11:00Z')}]);
+});
+
+test('XML entities preserve titles and URL query parameters', () => {
+  const [item] = parseFeed('<rss><channel><item><title>Chile &amp; econom&#237;a</title><link>https://www.df.cl/noticia?a=1&amp;b=2</link></item></channel></rss>');
+  assert.equal(item.title, 'Chile & economía');
+  assert.equal(item.url, 'https://www.df.cl/noticia?a=1&b=2');
+  assert.throws(() => parseFeed('<!DOCTYPE rss [<!ENTITY injected "value">]><rss/>'), /DTD/);
+});
+
+test('BioBioChile accepts current affairs sections and excludes unrelated stories', () => {
+  const source = SOURCES.find(s => s.id === 'biobiochile');
+  const now = Date.now();
+  for (const section of ['nacional', 'internacional', 'economia', 'ciencia-y-tecnologia']) {
+    assert.equal(eligible({date:now,url:`https://www.biobiochile.cl/noticias/${section}/articulo.shtml`}, source, now), true);
+  }
+  for (const path of ['deportes', 'espectaculos-y-tv', 'sociedad', 'opinion', 'servicios', 'nacional-falso']) {
+    assert.equal(eligible({date:now,url:`https://www.biobiochile.cl/noticias/${path}/articulo.shtml`}, source, now), false);
+  }
+  assert.equal(eligible({date:now,url:'https://otro.cl/noticias/nacional/articulo'},source,now), false);
+  assert.equal(eligible({date:now,url:'invalid'},source,now), false);
+  assert.equal(eligible({date:now-3*86400000,url:'https://www.biobiochile.cl/noticias/nacional/articulo'},source,now), false);
+});
+
+test('Real cron slots rotate all three news sources evenly and preserve hourly library', () => {
+  const counts = {};
+  const start = Date.parse('2026-11-08T00:00:00Z');
+  for (let hour=0; hour<48; hour++) {
+    assert.equal(sourceAt(start + hour*3600000 + 7*60000).id, 'freecodecamp-es');
+    const source = sourceAt(start + hour*3600000 + 38*60000);
+    counts[source.id] = (counts[source.id] ?? 0) + 1;
+    assert.equal(source.channel, 'NEWS_CHANNEL_ID');
+  }
+  assert.deepEqual(counts, {'diario-financiero':16,'dw-es':16,'biobiochile':16});
+  assert.equal(SOURCES.some(source => /bbc/i.test(JSON.stringify(source))), false);
 });

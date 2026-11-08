@@ -14,8 +14,8 @@ function fixture(t) {
     async first() { return db.prepare(sql).get(...values); }
   });
   const env = { ENABLED:'true', DAILY_LIMIT:'6', DISCORD_BOT_TOKEN:'test-token', NEWS_CHANNEL_ID:'123456789012345678', LIBRARY_CHANNEL_ID:'234567890123456789', DB: { prepare: wrap, async batch(statements) { return Promise.all(statements.map(s => s.run())); } } };
-  // Use an even half-hour slot to select BBC.
-  const timestamp = Math.floor(Date.now() / 3600000) * 3600000;
+  // Select a Diario Financiero news slot.
+  const timestamp = Math.floor(Date.now() / 10800000) * 10800000 + 38 * 60000;
   let calls = 0;
   let failure = false;
   t.mock.method(globalThis, 'fetch', async (url, options) => {
@@ -33,7 +33,7 @@ test('First run seeds existing stories without posting', async t => {
 });
 test('New stories publish once, persisting the thread id', async t => {
   const f = fixture(t);
-  f.db.exec("INSERT INTO sources VALUES('bbc-mundo',1)");
+  f.db.exec("INSERT INTO sources VALUES('diario-financiero',1)");
   assert.equal((await run(f.env, f.timestamp)).status, 'published');
   assert.equal((await run(f.env, f.timestamp)).status, 'no_new_items');
   assert.equal(f.calls(), 1);
@@ -41,7 +41,7 @@ test('New stories publish once, persisting the thread id', async t => {
 });
 test('Uncertain network delivery is not blindly retried', async t => {
   const f = fixture(t); f.fail();
-  f.db.exec("INSERT INTO sources VALUES('bbc-mundo',1)");
+  f.db.exec("INSERT INTO sources VALUES('diario-financiero',1)");
   await assert.rejects(run(f.env, f.timestamp), /uncertain delivery/);
   assert.equal(f.db.prepare('SELECT status FROM entries').get().status, 'uncertain');
   assert.equal((await run(f.env, f.timestamp)).status, 'no_new_items');
@@ -49,8 +49,8 @@ test('Uncertain network delivery is not blindly retried', async t => {
 });
 test('Daily cap stops publication', async t => {
   const f = fixture(t); f.env.DAILY_LIMIT = '1';
-  f.db.exec("INSERT INTO sources VALUES('bbc-mundo',1)");
-  f.db.prepare("INSERT INTO entries(url,source,status,local_day) VALUES('https://example.com/old','bbc-mundo','sent',?)").run(chileDay(f.timestamp));
+  f.db.exec("INSERT INTO sources VALUES('diario-financiero',1)");
+  f.db.prepare("INSERT INTO entries(url,source,status,local_day) VALUES('https://example.com/old','diario-financiero','sent',?)").run(chileDay(f.timestamp));
   assert.equal((await run(f.env, f.timestamp)).status, 'daily_limit');
   assert.equal(f.calls(), 0);
 });
@@ -62,14 +62,14 @@ test('Concurrent run lease prevents duplicate posting', async t => {
 });
 test('Initialization-only mode never publishes even when new content exists', async t => {
   const f = fixture(t); f.env.INITIALIZE_ONLY = 'true';
-  f.db.exec("INSERT INTO sources VALUES('bbc-mundo',1)");
+  f.db.exec("INSERT INTO sources VALUES('diario-financiero',1)");
   assert.equal((await run(f.env, f.timestamp)).status, 'checked_without_publishing');
   assert.equal(f.calls(), 0);
   assert.equal(f.db.prepare('SELECT count(*) AS n FROM entries').get().n, 0);
 });
 test('Bounded diagnostics skip already initialized sources', async t => {
   const f = fixture(t); f.env.INITIALIZE_ONLY = 'true'; f.env.DIAGNOSTIC_UNTIL = String(f.timestamp + 60000);
-  f.db.exec("INSERT INTO sources VALUES('bbc-mundo',1)");
+  f.db.exec("INSERT INTO sources VALUES('diario-financiero',1)");
   assert.equal((await run(f.env,f.timestamp)).status,'diagnostic_complete');
   assert.equal(globalThis.fetch.mock.callCount(),0);
 });
